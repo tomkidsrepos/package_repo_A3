@@ -1,0 +1,37 @@
+name: Build Repo Package
+on:
+  schedule:
+    - cron: '0 * * * *'
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate Packages
+        run: |
+          rm -f Packages Packages.bz2
+          dpkg-scanpackages -m . /dev/null > Packages
+          bzip2 -fks Packages
+          
+      - name: Commit and Push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-generate Packages"
+          file_pattern: "Packages Packages.bz2"
+
+      - name: Trigger Main Repo Sync
+        if: success()
+        run: |
+          curl -X POST https://api.github.com/repos/tomkidsrepos/tomkidsrepos.github.io/dispatches \
+          -H 'Accept: application/vnd.github.v3+json' \
+          -H 'Authorization: token ${{ secrets.PAT_TOKEN }}' \
+          -d '{"event_type": "trigger-sync"}'
